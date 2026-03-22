@@ -1,0 +1,70 @@
+name: Publish Docker Image
+
+# Triggers:
+# 1. Automatically when a draft release is published
+# 2. Manually via workflow_dispatch with a version tag
+#
+# Downloads the Docker tarball from this repo's release assets,
+# smoke tests it, then pushes to ghcr.io/ccollicutt/vary.
+# This file lives in ccollicutt/vary (the public repo).
+
+on:
+  release:
+    types: [published]
+  workflow_dispatch:
+    inputs:
+      version:
+        description: 'Release tag (e.g. v113-alpha.1)'
+        required: true
+        type: string
+
+permissions:
+  contents: read
+  packages: write
+
+jobs:
+  push:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Resolve version
+        id: version
+        run: |
+          if [ -n "${{ inputs.version }}" ]; then
+            echo "tag=${{ inputs.version }}" >> "$GITHUB_OUTPUT"
+          else
+            echo "tag=${{ github.event.release.tag_name }}" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Download Docker tarball from release
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          VERSION="${{ steps.version.outputs.tag }}"
+          gh release download "$VERSION" \
+            --repo "${{ github.repository }}" \
+            --pattern "*-docker.tar.gz" \
+            --dir docker-assets
+
+      - name: Load Docker image
+        run: |
+          VERSION="${{ steps.version.outputs.tag }}"
+          gunzip -c docker-assets/vary-${VERSION}-docker.tar.gz | docker load
+
+      - name: Smoke test
+        run: |
+          docker run --rm varylang/vary:latest --version
+          docker run --rm varylang/vary:latest version --json
+          docker run --rm varylang/vary:latest run /opt/vary/examples/hello.vary
+
+      - name: Push Docker image to ghcr.io
+        run: |
+          VERSION="${{ steps.version.outputs.tag }}"
+          echo "${{ secrets.GITHUB_TOKEN }}" | docker login ghcr.io -u ${{ github.actor }} --password-stdin
+          docker tag varylang/vary:${VERSION} ghcr.io/ccollicutt/vary:${VERSION}
+          docker tag varylang/vary:latest ghcr.io/ccollicutt/vary:latest
+          docker push ghcr.io/ccollicutt/vary:${VERSION}
+          docker push ghcr.io/ccollicutt/vary:latest
+direnv: loading ~/working/vary-language/.envrc
+direnv: export +GITHUB_TOKEN +VARYUP_INCLUDE_DRAFTS +VARY_RELEASE_TOKEN ~PATH
+
