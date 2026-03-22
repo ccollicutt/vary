@@ -65,6 +65,4 @@ jobs:
           docker tag varylang/vary:latest ghcr.io/ccollicutt/vary:latest
           docker push ghcr.io/ccollicutt/vary:${VERSION}
           docker push ghcr.io/ccollicutt/vary:latest
-direnv: loading ~/working/vary-language/.envrc
-direnv: export +GITHUB_TOKEN +VARYUP_INCLUDE_DRAFTS +VARY_RELEASE_TOKEN ~PATH
 
